@@ -80,6 +80,11 @@ class Settings(BaseSettings):
     # --- Webdis (legacy compat) ---
     webdis_url: str = "http://webdis-svc.webdis:7379"
 
+    # --- Internal web-proxy worker (OpenCode Zen) ---
+    # The upstream worker owns its own authentication; the application never
+    # handles credentials. Do not add username/password here.
+    proxy_worker_url: str = "https://holy-glade-c7ae.lorenzo2632.workers.dev"
+
     @model_validator(mode="after")
     def _reject_production_defaults(self) -> "Settings":
         """Fail fast in production when the default credentials are still set.
