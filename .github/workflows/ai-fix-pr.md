@@ -24,7 +24,7 @@ engine:
   env:
     COPILOT_PROVIDER_BASE_URL: "https://opencode.ai/zen/v1"
     COPILOT_PROVIDER_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
-    COPILOT_PROVIDER_WIRE_API: "openai"
+    COPILOT_PROVIDER_WIRE_API: "completions"
 model: copilot/hy3-free
 network:
   allowed:
