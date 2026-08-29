@@ -13,6 +13,7 @@ permissions:
 concurrency:
   group: ai-issue-to-draft-pr-${{ inputs.issue_number }}
 timeout-minutes: 40
+threat-detection: false
 models:
   default-ai-credits-pricing:
     input: 3.0

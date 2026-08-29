@@ -16,6 +16,7 @@ permissions:
 concurrency:
   group: ai-ci-diagnose-${{ inputs.pr_number }}
 timeout-minutes: 20
+threat-detection: false
 models:
   default-ai-credits-pricing:
     input: 3.0

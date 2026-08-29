@@ -19,6 +19,7 @@ permissions:
 concurrency:
   group: ai-fix-pr-${{ inputs.pr_number }}
 timeout-minutes: 30
+threat-detection: false
 models:
   default-ai-credits-pricing:
     input: 3.0
