@@ -16,9 +16,10 @@ permissions:
 concurrency:
   group: ai-ci-diagnose-${{ inputs.pr_number }}
 timeout-minutes: 20
-default-ai-credits-pricing:
-  input: 3.0
-  output: 15.0
+models:
+  default-ai-credits-pricing:
+    input: 3.0
+    output: 15.0
 engine:
   id: copilot
   env:

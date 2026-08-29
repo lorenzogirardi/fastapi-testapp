@@ -15,9 +15,10 @@ concurrency:
   group: ai-pr-review-${{ github.event.pull_request.number || inputs.pr_number }}
   cancel-in-progress: true
 timeout-minutes: 20
-default-ai-credits-pricing:
-  input: 3.0
-  output: 15.0
+models:
+  default-ai-credits-pricing:
+    input: 3.0
+    output: 15.0
 engine:
   id: copilot
   env:

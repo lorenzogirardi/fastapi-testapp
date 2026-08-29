@@ -13,9 +13,10 @@ permissions:
 concurrency:
   group: ai-issue-to-draft-pr-${{ inputs.issue_number }}
 timeout-minutes: 40
-default-ai-credits-pricing:
-  input: 3.0
-  output: 15.0
+models:
+  default-ai-credits-pricing:
+    input: 3.0
+    output: 15.0
 engine:
   id: copilot
   env:
