@@ -1,0 +1,29 @@
+# values-izanami.yaml — overrides for izanami cluster (192.168.1.14)
+# Usage:
+#   helm upgrade --install pytbak ./helm/pytbak \
+#     -f helm/pytbak/values.yaml \
+#     -f helm/pytbak/values-izanami.yaml \
+#     --set auth.password=<value> \
+#     --set postgresql.url="postgresql+asyncpg://pytbak:<PG_PASSWORD>@postgresql.postgresql.svc.cluster.local:5432/pytbak" \
+#     --context izanami -n pytbak
+
+replicaCount: 1
+
+autoscaling:
+  enabled: false
+
+redis:
+  url: "redis://redis.redis.svc.cluster.local:6379/0"
+  # If Redis has password:
+  # url: "redis://:PASSWORD@redis.redis.svc.cluster.local:6379/0"
+
+webdis:
+  url: "http://webdis.redis.svc.cluster.local:7379"
+
+postgresql:
+  # Set via --set postgresql.url=... to avoid storing credentials in git
+  url: ""
+
+networkPolicy:
+  enabled: true
+  # Egress to ports 5432 and 6379 already allowed in base NetworkPolicy (no namespace restriction)

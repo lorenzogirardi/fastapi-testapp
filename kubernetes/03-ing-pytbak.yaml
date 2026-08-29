@@ -1,0 +1,21 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: pytbak-ingress
+  namespace: pytbak
+  annotations:
+    ingress.kubernetes.io/proxy-connect-timeout: "10"
+    ingress.kubernetes.io/proxy-read-timeout: "30"
+    ingress.kubernetes.io/proxy-send-timeout: "30"
+spec:
+  rules:
+  - host: oracolo.k8s.it
+    http:
+      paths:
+      - path: /api/
+        pathType: Prefix
+        backend:
+          service:
+            name: pytbak-svc
+            port:
+              number: 5000

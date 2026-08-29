@@ -1,0 +1,111 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: pytbak
+    track: pytbak-stable
+    tags.datadoghq.com/env: home-remote
+    tags.datadoghq.com/service: pytbak
+    tags.datadoghq.com/version: stable
+  name: pytbak-stable
+  namespace: pytbak
+spec:
+  minReadySeconds: 10
+  replicas: 1
+  revisionHistoryLimit: 5
+  selector:
+    matchLabels:
+      app: pytbak
+      track: pytbak-stable
+  strategy:
+    rollingUpdate:
+      maxSurge: 50%
+      maxUnavailable: 0
+    type: RollingUpdate
+  template:
+    metadata:
+      annotations:
+        admission.datadoghq.com/python-lib.version: v2.4.0
+        prometheus.io/path: /metrics
+        prometheus.io/port: "5000"
+        prometheus.io/scrape: "true"
+      labels:
+        admission.datadoghq.com/enabled: "true"
+        app: pytbak
+        track: pytbak-stable
+        tags.datadoghq.com/env: home-remote
+        tags.datadoghq.com/service: pytbak
+        tags.datadoghq.com/version: stable
+    spec:
+      automountServiceAccountToken: false
+      containers:
+      - name: pytbak
+        image: ghcr.io/lorenzogirardi/fastapi-testapp:latest
+        imagePullPolicy: Always
+        volumeMounts:
+        - name: applogs
+          mountPath: /var/log
+        - name: tmp
+          mountPath: /tmp
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 10001
+          readOnlyRootFilesystem: true
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+              - ALL
+          seccompProfile:
+            type: RuntimeDefault
+        env:
+          - name: DD_PROFILING_ENABLED
+            value: "true"
+          - name: DD_LOGS_INJECTION
+            value: "true"
+          - name: DD_TRACE_SAMPLE_RATE
+            value: "1"
+          - name: DIAG_USERNAME
+            valueFrom:
+              secretKeyRef:
+                name: diag-credentials
+                key: DIAG_USERNAME
+          - name: DIAG_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: diag-credentials
+                key: DIAG_PASSWORD
+        resources:
+          limits:
+            cpu: 300m
+            memory: 250Mi
+          requests:
+            cpu: 30m
+            memory: 125Mi
+        ports:
+        - name: http
+          containerPort: 5000
+        livenessProbe:
+          failureThreshold: 3
+          httpGet:
+            path: /api/
+            port: 5000
+            scheme: HTTP
+          initialDelaySeconds: 4
+          periodSeconds: 2
+          successThreshold: 1
+          timeoutSeconds: 2
+        readinessProbe:
+          failureThreshold: 2
+          httpGet:
+            path: /api/fib/1000
+            port: 5000
+            scheme: HTTP
+          initialDelaySeconds: 4
+          periodSeconds: 2
+          successThreshold: 3
+          timeoutSeconds: 2
+      volumes:
+      - name: applogs
+        emptyDir: {}
+      - name: tmp
+        emptyDir: {}

@@ -1,0 +1,36 @@
+# values-milano.yaml — overrides for k3s-milano cluster (192.168.100.103)
+# Usage:
+#   helm upgrade --install pytbak ./helm/pytbak \
+#     -f helm/pytbak/values.yaml \
+#     -f helm/pytbak/values-milano.yaml \
+#     --set auth.password=<value> \
+#     --set postgresql.url="postgresql+asyncpg://pytbak:<PG_PASSWORD>@postgresql.postgresql.svc.cluster.local:5432/pytbak" \
+#     --set redis.url="redis://:REDIS_PASSWORD@redis.redis.svc.cluster.local:6379/0" \
+#     --kubeconfig=/Users/lgirardi/.kube/judge.conf -n pytbak --wait --timeout 300s
+#
+# NOTE: timeout 300s necessario — Datadog Admission Controller inietta init containers
+#       che rallentano il pod startup (~20s extra per replica)
+# SSH tunnel required: ssh -L 6443:127.0.0.1:6443 root@milano.freemyip.com -p 55022 -N
+
+replicaCount: 1
+
+autoscaling:
+  enabled: false
+
+redis:
+  url: "redis://redis.redis.svc.cluster.local:6379/0"
+
+postgresql:
+  # Set via --set postgresql.url=... to avoid storing credentials in git
+  url: ""
+
+webdis:
+  url: "http://webdis.redis.svc.cluster.local:7379"
+
+otel:
+  enabled: true
+  endpoint: "http://datadog-agent.datadog.svc.cluster.local:4317"
+  serviceName: pytbak
+
+networkPolicy:
+  enabled: true

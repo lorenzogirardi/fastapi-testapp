@@ -1,0 +1,98 @@
+replicaCount: 2
+
+image:
+  repository: ghcr.io/lorenzogirardi/fastapi-testapp
+  tag: "latest"
+  pullPolicy: IfNotPresent
+
+service:
+  type: ClusterIP
+  port: 8000
+
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  hosts:
+    - host: pytbak.local
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+
+# --- Environment configuration ---
+# In production, Redis and PostgreSQL are external HTTP/S endpoints.
+# If not configured, the app falls back to in-memory storage.
+env:
+  APP_ENV: production
+  LOG_LEVEL: INFO
+  PROMETHEUS_ENABLED: "true"
+  OTEL_ENABLED: "false"
+  RATE_LIMIT: "100/minute"
+  CACHE_TTL: "300"
+  # Debug/network tools and MCP are opt-in: leave disabled in production unless
+  # this API is intentionally a diagnostics service for the cluster.
+  # DEBUG_ENDPOINTS_ENABLED: "false"
+  # MCP_ENABLED: "false"
+  ERROR_INJECTION_ENABLED: "true"
+  ERROR_INJECTION_MAX_DELAY_MS: "10000"
+  # Block loopback/private/link-local/metadata targets in network debug tools:
+  SSRF_PROTECTION_ENABLED: "true"
+
+# External services (production endpoints)
+# Set to "" to disable and use in-memory fallback
+redis:
+  # url: "redis://your-redis.example.com:6379/0"
+  url: ""
+
+postgresql:
+  # url: "postgresql+asyncpg://user:pass@your-pg.example.com:5432/pytbak"
+  url: ""
+
+webdis:
+  # url: "http://webdis.redis.svc.cluster.local:7379"
+  url: ""
+
+# Observability — both consumed by Datadog Agent in production:
+#   - Traces: OTEL via OTLP -> Datadog Agent (port 4317)
+#   - Metrics: /metrics endpoint -> Datadog Agent (openmetrics check or autodiscovery)
+otel:
+  enabled: false
+  endpoint: "http://datadog-agent:4317"
+  serviceName: pytbak
+
+# Secrets (create a secret named pytbak-auth externally or set here)
+auth:
+  username: admin
+  # password: set via --set auth.password=<value> or external secret
+  password: ""
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 256Mi
+
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 70
+
+nodeSelector: {}
+tolerations: []
+affinity: {}
+
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1
+
+networkPolicy:
+  enabled: true
+
+serviceMonitor:
+  enabled: false
+  interval: 15s
+  path: /metrics

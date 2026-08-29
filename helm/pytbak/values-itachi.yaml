@@ -1,0 +1,41 @@
+# values-itachi.yaml — overrides for itachi cluster
+# Usage:
+#   helm upgrade --install pytbak ./helm/pytbak \
+#     -f helm/pytbak/values.yaml \
+#     -f helm/pytbak/values-itachi.yaml \
+#     --set auth.password=<value> \
+#     --set postgresql.url="postgresql+asyncpg://pytbak:<PG_PASSWORD>@postgresql.postgresql.svc.cluster.local:5432/pytbak" \
+#     --set redis.url="redis://:REDIS_PASSWORD@redis.redis.svc.cluster.local:6379/0" \
+#     --kube-context itachi -n pytbak --wait --timeout 300s
+#
+# NOTE: timeout 300s necessario — Datadog Admission Controller inietta init containers
+#       che rallentano il pod startup (~20s extra per replica)
+
+replicaCount: 2
+
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 70
+
+redis:
+  url: "redis://redis.redis.svc.cluster.local:6379/0"
+  # If Redis has password:
+  # url: "redis://:PASSWORD@redis.redis.svc.cluster.local:6379/0"
+
+postgresql:
+  # Set via --set postgresql.url=... to avoid storing credentials in git
+  url: ""
+
+webdis:
+  url: "http://webdis.redis.svc.cluster.local:7379"
+
+otel:
+  enabled: true
+  endpoint: "http://datadog-agent.datadog.svc.cluster.local:4317"
+  serviceName: pytbak
+
+networkPolicy:
+  enabled: true
+  # Egress to ports 5432 and 6379 already allowed in base NetworkPolicy (no namespace restriction)

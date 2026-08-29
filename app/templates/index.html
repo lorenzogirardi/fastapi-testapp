@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="base-path" content="{{ base_path }}">
+  <meta name="robots" content="noindex, nofollow">
+  <title>{{ app_name }} &mdash; DebugKnife Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ base_path }}/static/css/dashboard.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔪</text></svg>">
+</head>
+<body>
+
+  <!-- ═══ HEADER ═══ -->
+  <header class="header">
+    <div class="container header-inner">
+      <a href="{{ base_path }}/" class="logo">
+        <div class="logo-icon">&#x1F52A;</div>
+        <span class="logo-text">{{ app_name }}</span>
+        <span class="logo-badge">v{{ version }}</span>
+      </a>
+      <div class="header-actions">
+        <button id="theme-toggle" class="btn-icon" title="Toggle theme">&#x2600;&#xFE0F;</button>
+        <a href="{{ base_path }}/docs" class="btn-icon" title="Swagger UI">&#x1F4D6;</a>
+        <a href="https://github.com/lorenzogirardi/flask-test-api" class="btn-icon" title="GitHub" target="_blank" rel="noopener">
+          &#x2B55;
+        </a>
+      </div>
+    </div>
+  </header>
+
+  <main class="container">
+
+    <!-- ═══ HERO ═══ -->
+    <section class="hero">
+      <h1>Swiss Army Knife for API Debugging</h1>
+      <p>Network probes &middot; Chaos injection &middot; Traces &middot; Metrics &mdash; all in one pod</p>
+      <div class="hero-version">
+        <span class="dot" id="overall-dot"></span>
+        <span id="app-version">v{{ version }} &middot; {{ environment }}</span>
+      </div>
+    </section>
+
+    <!-- ═══ KPIs ═══ -->
+    <div class="kpi-grid">
+      <div class="kpi-card">
+        <div class="kpi-label">Endpoints</div>
+        <div class="kpi-value" id="kpi-endpoints"><span class="spinner"></span></div>
+        <div class="kpi-sub">routes registered</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">Session Uptime</div>
+        <div class="kpi-value" id="kpi-uptime">0m 0s</div>
+        <div class="kpi-sub">since page load</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">PostgreSQL</div>
+        <div class="kpi-value {{ pg_color }}" id="kpi-pg">{{ pg_status }}</div>
+        <div class="kpi-sub">database backend</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">Redis</div>
+        <div class="kpi-value {{ redis_color }}" id="kpi-redis">{{ redis_status }}</div>
+        <div class="kpi-sub">cache backend</div>
+      </div>
+    </div>
+
+    <!-- ═══ QUICK ACTIONS ═══ -->
+    <div class="section-title">Quick Actions</div>
+    <div class="actions-grid">
+      <a href="{{ base_path }}/docs" class="action-card">
+        <div class="action-icon blue">&#x1F4D6;</div>
+        <div>
+          <div class="action-label">API Explorer</div>
+          <div class="action-desc">Swagger UI &middot; Interactive docs</div>
+        </div>
+        <span class="action-arrow">&rarr;</span>
+      </a>
+      <a href="{{ base_path }}/docs#/Debug" class="action-card">
+        <div class="action-icon red">&#x1F4A5;</div>
+        <div>
+          <div class="action-label">Inject Chaos</div>
+          <div class="action-desc">CPU spike &middot; Random errors &middot; Delays</div>
+        </div>
+        <span class="action-arrow">&rarr;</span>
+      </a>
+      <a href="{{ base_path }}/docs#/Debug/network_scan_debug_network_scan_get" class="action-card">
+        <div class="action-icon green">&#x1F310;</div>
+        <div>
+          <div class="action-label">Network Probe</div>
+          <div class="action-desc">DNS &middot; TCP check &middot; Ping &middot; Traceroute</div>
+        </div>
+        <span class="action-arrow">&rarr;</span>
+      </a>
+      <a href="{{ base_path }}/redoc" class="action-card">
+        <div class="action-icon purple">&#x1F4C8;</div>
+        <div>
+          <div class="action-label">ReDoc</div>
+          <div class="action-desc">OpenAPI schema &middot; Clean reference docs</div>
+        </div>
+        <span class="action-arrow">&rarr;</span>
+      </a>
+    </div>
+
+    <!-- ═══ STATUS ═══ -->
+    <div class="section-title">Infrastructure Status</div>
+    <div class="status-grid">
+      <div class="status-card" id="status-postgresql">
+        <div class="status-dot pulse {{ pg_dot }}"></div>
+        <div class="status-name">PostgreSQL</div>
+        <div class="status-detail">{{ pg_status }}</div>
+      </div>
+      <div class="status-card" id="status-redis">
+        <div class="status-dot pulse {{ redis_dot }}"></div>
+        <div class="status-name">Redis</div>
+        <div class="status-detail">{{ redis_status }}</div>
+      </div>
+      <div class="status-card">
+        <div class="status-dot pulse {{ otel_dot }}"></div>
+        <div class="status-name">OpenTelemetry</div>
+        <div class="status-detail">{{ otel_status }}</div>
+      </div>
+      <div class="status-card">
+        <div class="status-dot pulse {{ prom_dot }}"></div>
+        <div class="status-name">Prometheus</div>
+        <div class="status-detail">{{ prom_status }}</div>
+      </div>
+    </div>
+
+    <!-- ═══ ENDPOINTS TABLE ═══ -->
+    <div class="section-title">Registered Endpoints</div>
+    <div class="table-wrapper">
+      <table>
+        <thead>
+          <tr>
+            <th>Method</th>
+            <th>Path</th>
+            <th>Name</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="endpoints-tbody">
+          <tr><td colspan="4" style="text-align:center;padding:2rem"><span class="spinner"></span> Loading...</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+  </main>
+
+  <!-- ═══ FOOTER ═══ -->
+  <footer class="footer">
+    <div class="footer-badges">
+      <span class="footer-badge">FastAPI {{ version }}</span>
+      <span class="footer-badge">Python 3.12</span>
+      <span class="footer-badge">OpenAPI 3.1</span>
+    </div>
+    <p>
+      <a href="{{ base_path }}/docs">Swagger</a> &middot;
+      <a href="{{ base_path }}/redoc">ReDoc</a>
+    </p>
+    <p style="margin-top:.35rem">Powered by FastAPI + OpenTelemetry + Datadog</p>
+  </footer>
+
+  <script src="{{ base_path }}/static/js/realtime.js"></script>
+</body>
+</html>

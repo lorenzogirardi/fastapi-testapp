@@ -1,0 +1,62 @@
+# Development docker-compose — web + PostgreSQL + Redis
+# Prometheus and OTEL are code libraries in the app (not containers).
+# /metrics is exposed by the app itself (prometheus-fastapi-instrumentator).
+# OTEL traces are exported via env var OTEL_EXPORTER_OTLP_ENDPOINT to any external collector.
+services:
+  # === App ===
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    env_file: .env
+    environment:
+      APP_ENV: development
+      DATABASE_URL: postgresql+asyncpg://pytbak:pytbak@postgres:5432/pytbak
+      REDIS_URL: redis://redis:6379/0
+      PROMETHEUS_ENABLED: "true"
+      DEBUG_ENDPOINTS_ENABLED: "true"
+      MCP_ENABLED: "true"
+      ERROR_INJECTION_ENABLED: "true"
+      # OTEL: disabled by default in dev, enable and point to external collector:
+      # OTEL_ENABLED: "true"
+      # OTEL_EXPORTER_OTLP_ENDPOINT: http://your-collector:4317
+      DIAG_USERNAME: admin
+      DIAG_PASSWORD: password
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # === PostgreSQL (DEV only, in prod use external endpoint) ===
+  postgres:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_USER: pytbak
+      POSTGRES_PASSWORD: pytbak
+      POSTGRES_DB: pytbak
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pytbak"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # === Redis (DEV only, in prod use external endpoint) ===
+  redis:
+    image: redis:8-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  pgdata:

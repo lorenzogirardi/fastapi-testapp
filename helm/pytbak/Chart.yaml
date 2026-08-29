@@ -1,0 +1,8 @@
+apiVersion: v2
+name: pytbak
+description: Python REST API Test & Debug Application (FastAPI)
+type: application
+version: 2.0.0
+appVersion: "2.0.0"
+maintainers:
+  - name: lorenzogirardi

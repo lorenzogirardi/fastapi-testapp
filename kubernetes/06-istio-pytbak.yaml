@@ -1,0 +1,30 @@
+apiVersion: networking.istio.io/v1alpha3
+kind: Gateway
+metadata:
+  name: pytbak-gateway
+spec:
+  selector:
+    istio: ingressgateway
+  servers:
+  - port:
+      number: 80
+      name: http
+      protocol: HTTP
+    hosts:
+    - "istio-gateway-10-0-254-135.nip.io"
+---
+apiVersion: networking.istio.io/v1alpha3
+kind: VirtualService
+metadata:
+  name: pytbak-vs
+spec:
+  hosts:
+  - "istio-gateway-10-0-254-135.nip.io"
+  gateways:
+  - pytbak-gateway
+  http:
+  - route:
+    - destination:
+        host: pytbak-svc
+        port:
+          number: 5000
