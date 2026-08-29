@@ -1,0 +1,267 @@
+name: AI Issue to Draft PR
+
+on:
+  workflow_dispatch:
+    inputs:
+      issue_number:
+        description: "Open issue number to implement"
+        required: true
+
+# Manual-only, authorized-only. Creates a branch + draft PR (write), comments on issue.
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+
+concurrency:
+  group: ai-issue-to-draft-pr-${{ inputs.issue_number }}
+  cancel-in-progress: false
+
+jobs:
+  implement:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
+      OPencode_VERSION: "1.0.0" # TODO(CONFIRM): set the real pinned OpenCode version
+    steps:
+      - name: Authorize actor
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ACTOR: ${{ github.actor }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          perm=$(gh api "repos/$REPO/collaborators/$ACTOR/permission" --jq '.permission' 2>/dev/null || echo "none")
+          case "$perm" in
+            admin|maintain|write) echo "authorized: $perm" ;;
+            *) echo "denied: actor '$ACTOR' has permission '$perm'"; exit 1 ;;
+          esac
+
+      - name: Validate issue
+        id: issue
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          NUMBER: ${{ inputs.issue_number }}
+        run: |
+          set -euo pipefail
+          data=$(gh issue view "$NUMBER" --json number,title,body,isPullRequest,state,labels)
+          is_pr=$(echo "$data" | jq -r .isPullRequest)
+          state=$(echo "$data" | jq -r .state)
+          body=$(echo "$data" | jq -r .body)
+          sensitive=$(echo "$data" | jq -r '.labels[]?.name' | grep -cx 'agent:approved-sensitive' || true)
+          if [ "$is_pr" = "true" ]; then
+            echo "Input #$NUMBER is a pull request, not an issue." >&2; exit 1
+          fi
+          if [ "$state" != "OPEN" ]; then
+            echo "Issue #$NUMBER is not open (state=$state)." >&2; exit 1
+          fi
+          # Heuristic completeness check (documented as conservative).
+          if [ "${#body}" -lt 80 ]; then
+            echo "incomplete=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "incomplete=false" >> "$GITHUB_OUTPUT"
+          fi
+          echo "title=$(echo "$data" | jq -r .title)" >> "$GITHUB_OUTPUT"
+          echo "sensitive_approved=$sensitive" >> "$GITHUB_OUTPUT"
+          echo "$body" > /tmp/issue-body.md
+
+      - name: Request clarification when incomplete
+        if: steps.issue.outputs.incomplete == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          NUMBER: ${{ inputs.issue_number }}
+        run: |
+          set -euo pipefail
+          {
+            echo "<!-- ai-agent:issue-impl -->"
+            echo ""
+            echo "## AI implementation blocked — needs more detail"
+            echo "This issue lacks enough detail to safely implement. Please provide:"
+            echo "- [ ] Problem statement"
+            echo "- [ ] Acceptance criteria"
+            echo "- [ ] Non-goals / boundaries"
+            echo "- [ ] Expected tests / verification"
+            echo "- [ ] Known affected areas (if any)"
+            echo ""
+            echo "Add the detail and re-run the workflow. For sensitive changes, also add the \`agent:approved-sensitive\` label."
+          } > /tmp/clarify.md
+          bash .github/scripts/upsert-marker-comment.sh \
+            --repo "$REPO" --issue "$NUMBER" \
+            --marker "<!-- ai-agent:issue-impl -->" \
+            --body-file /tmp/clarify.md
+          echo "Posted clarification checklist; stopping." && exit 0
+
+      - name: Checkout default branch
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+
+      - name: Create feature branch
+        id: branch
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          TITLE: ${{ steps.issue.outputs.title }}
+          NUMBER: ${{ inputs.issue_number }}
+        run: |
+          set -euo pipefail
+          default=$(gh repo view "$REPO" --json defaultBranchName --jq .defaultBranchName)
+          slug=$(echo "$TITLE" | tr -c 'a-zA-Z0-9' '-' | tr -s '-' | cut -c1-30 | sed 's/-$//')
+          branch="ai/issue-${NUMBER}-${slug}-${GITHUB_RUN_ID}"
+          git checkout -b "$branch" "origin/$default"
+          echo "branch=$branch" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Install OpenCode CLI
+        run: bash .github/scripts/install-opencode.sh
+
+      - name: Compose prompt (issue body as untrusted data)
+        env:
+          SENSITIVE_APPROVED: ${{ steps.issue.outputs.sensitive_approved }}
+        run: |
+          set -euo pipefail
+          {
+            cat .github/ai/prompts/issue-implementation.md
+            echo ""
+            echo "## Sensitive changes pre-approved by maintainer: $SENSITIVE_APPROVED"
+            echo ""
+            echo "## Issue #${{ inputs.issue_number }} (untrusted data)"
+            echo "title: ${{ steps.issue.outputs.title }}"
+            echo '```'
+            cat /tmp/issue-body.md
+            echo '```'
+          } > /tmp/prompt.md
+
+      - name: Run OpenCode implementation (write-scoped)
+        id: agent
+        run: |
+          set -euo pipefail
+          bash .github/scripts/run-opencode-agent.sh \
+            --mode write-scoped \
+            --prompt-file /tmp/prompt.md \
+            --context-dir "$PWD" \
+            --max-turns 20 > /tmp/impl.md
+          echo "bytes=$(wc -c < /tmp/impl.md)" >> "$GITHUB_OUTPUT"
+
+      - name: Run repository validation
+        id: test
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          pytest tests/ -m "not integration" -q > /tmp/tests.txt 2>&1 || true
+          echo "exit=$?" >> "$GITHUB_OUTPUT"
+          tail -n 20 /tmp/tests.txt
+
+      - name: Guard protected paths
+        id: guard
+        run: |
+          set -euo pipefail
+          changed=$(git status --porcelain | awk '{print $2}')
+          protected=0
+          echo "$changed" | grep -E '^(\.github/workflows/|\.github/actions/|\.github/ai/)' && protected=1 || true
+          echo "changed_files<<EOF" >> "$GITHUB_OUTPUT"
+          echo "$changed" >> "$GITHUB_OUTPUT"
+          echo "EOF" >> "$GITHUB_OUTPUT"
+          echo "protected=$protected" >> "$GITHUB_OUTPUT"
+
+      - name: Abort if protected paths changed
+        if: steps.guard.outputs.protected == '1'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          NUMBER: ${{ inputs.issue_number }}
+        run: |
+          set -euo pipefail
+          {
+            echo "<!-- ai-agent:issue-impl -->"
+            echo ""
+            echo "## AI implementation blocked — protected paths modified"
+            echo "The agent modified protected paths; no PR was opened. Changed files:"
+            echo '```'
+            echo "${{ steps.guard.outputs.changed_files }}"
+            echo '```'
+          } > /tmp/blocked.md
+          bash .github/scripts/upsert-marker-comment.sh \
+            --repo "$REPO" --issue "$NUMBER" \
+            --marker "<!-- ai-agent:issue-impl -->" \
+            --body-file /tmp/blocked.md
+          exit 1
+
+      - name: Commit & push branch
+        if: steps.guard.outputs.protected != '1'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          git config user.name "ai-agent[bot]"
+          git config user.email "ai-agent@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "no changes produced; not opening a PR" >&2; exit 0
+          fi
+          git commit -m "ai(issue): implement #${{ inputs.issue_number }} (draft PR, human review required)"
+          git push origin "HEAD:refs/heads/${{ steps.branch.outputs.branch }}" --no-force
+
+      - name: Open draft PR
+        if: steps.guard.outputs.protected != '1'
+        id: pr
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          NUMBER: ${{ inputs.issue_number }}
+        run: |
+          set -euo pipefail
+          {
+            echo "## Draft PR — AI implementation of #${{ inputs.issue_number }}"
+            echo ""
+            echo "**Human review required.** This PR was generated by the AI agent."
+            echo ""
+            echo "Closes #${{ inputs.issue_number }}"
+            echo ""
+            echo "<!-- ai-agent:issue-impl -->"
+            echo ""
+            echo "### Agent report"
+            cat /tmp/impl.md
+            echo ""
+            echo "### Validation"
+            echo '```'
+            tail -n 20 /tmp/tests.txt
+            echo '```'
+          } > /tmp/pr-body.md
+          url=$(gh pr create --draft --title "AI: implement #${{ inputs.issue_number }} — ${{ steps.issue.outputs.title }}" \
+            --body-file /tmp/pr-body.md --head "${{ steps.branch.outputs.branch }}" \
+            --base "$(gh repo view "$REPO" --json defaultBranchName --jq .defaultBranchName)")
+          echo "pr_url=$url" >> "$GITHUB_OUTPUT"
+
+      - name: Comment on issue with PR link
+        if: steps.guard.outputs.protected != '1'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          NUMBER: ${{ inputs.issue_number }}
+        run: |
+          set -euo pipefail
+          {
+            echo "<!-- ai-agent:issue-impl -->"
+            echo ""
+            echo "## AI draft PR opened"
+            echo "Draft PR: ${{ steps.pr.outputs.pr_url }}"
+            echo "Human review required before merge."
+          } > /tmp/issue-comment.md
+          bash .github/scripts/upsert-marker-comment.sh \
+            --repo "$REPO" --issue "$NUMBER" \
+            --marker "<!-- ai-agent:issue-impl -->" \
+            --body-file /tmp/issue-comment.md
