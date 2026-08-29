@@ -16,7 +16,6 @@ permissions:
 concurrency:
   group: ai-ci-diagnose-${{ inputs.pr_number }}
 timeout-minutes: 20
-threat-detection: false
 models:
   default-ai-credits-pricing:
     input: 3.0
@@ -35,6 +34,7 @@ network:
     - opencode.ai
 safe-outputs:
   add-comment: null
+  threat-detection: false
 ---
 
 # Task
