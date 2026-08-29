@@ -29,7 +29,8 @@ jobs:
       github.event.pull_request.head.repo.full_name == github.repository
     env:
       OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
-      OPencode_VERSION: "1.0.0" # TODO(CONFIRM): set the real pinned OpenCode version
+      OPENCODE_ZEN_ENDPOINT: ${{ vars.OPENCODE_ZEN_ENDPOINT }}
+      OPENCODE_MODEL: ${{ vars.OPENCODE_MODEL }}
     steps:
       - name: Resolve PR refs
         id: refs
@@ -81,10 +82,6 @@ jobs:
         env:
           BASE: ${{ steps.refs.outputs.base_sha }}
           HEAD: ${{ steps.refs.outputs.head_sha }}
-
-      - name: Install OpenCode CLI
-        if: steps.refs.outputs.same_repo == 'true'
-        run: bash .github/scripts/install-opencode.sh
 
       - name: Compose prompt (static + diff as untrusted data)
         if: steps.refs.outputs.same_repo == 'true'

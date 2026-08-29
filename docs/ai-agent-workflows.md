@@ -17,14 +17,15 @@ with OpenCode Zen credentials. Four workflows live under `.github/workflows/`.
                          │            │                                  │
                          │            ▼                                  │
                          │   .github/scripts/                           │
-                         │   ├─ install-opencode.sh                     │
-                         │   ├─ run-opencode-agent.sh  (only OpenCode    │
-                         │   │                            entrypoint)    │
+                         │   ├─ run-opencode-agent.sh  (HTTP client to   │
+                         │   │                            Zen endpoint)   │
                          │   └─ upsert-marker-comment.sh                │
                          │            │                                  │
                          │            ▼                                  │
-                         │   OpenCode CLI ──▶ OpenCode Zen (LLM)         │
-                         │   (OPENCODE_API_KEY secret)                  │
+                         │   run-opencode-agent.sh                       │
+                         │   (curl) ──▶ OpenCode Zen ENDPOINT (remote)    │
+                         │   (OPENCODE_API_KEY secret, model+endpoint     │
+                         │    from repo VARIABLES)                        │
                          └─────────────────────────────────────────────┘
                                   │ posts/updates
                                   ▼
@@ -47,7 +48,13 @@ workflows may run automatically (review) but never mutate state.
 
 1. **Secret** `OPENCODE_API_KEY` — your OpenCode Zen API key.
    Settings → Secrets and variables → Actions → New repository secret.
-2. **Variable** `AI_AGENT_WRITE_ENABLED` = `false` (initially). Settings →
+2. **Variable** `OPENCODE_ZEN_ENDPOINT` — full URL of the OpenCode Zen agent
+   endpoint (e.g. `https://zen.opencode.ai/v1/chat/completions`). Repo variable,
+   not a secret. The runner POSTs prompts here; no OpenCode binary is installed
+   locally.
+3. **Variable** `OPENCODE_MODEL` — the Zen model id to use (e.g. `opus-...`).
+   Repo variable, not a secret. Change it without editing tracked files.
+4. **Variable** `AI_AGENT_WRITE_ENABLED` = `false` (initially). Settings →
    Secrets and variables → Actions → Variables. Set to `true` only when you want
    `ai-fix-pr` to actually push (still requires an authorized actor + manual run).
 3. **Branch protection** on the default branch: require a passing review / status
@@ -90,9 +97,13 @@ No slash-command trigger is implemented (no safe existing convention); all runs 
   release/Terraform-root) are blocked from being pushed by a guard step.
 - The agent CANNOT merge, approve, dismiss reviews, alter protection, or change
   labels. Human review is mandatory.
-- **Known limitation**: the exact OpenCode CLI subcommand/flags are placeholders
-  (see `run-opencode-agent.sh` `TODO(CONFIRM)`). Validate the binary/install before
-  enabling write mode.
+- **Known limitation**: the exact OpenCode Zen request schema/response field
+  (see `run-opencode-agent.sh` `TODO(CONFIRM)`) is a placeholder. Confirm the path,
+  auth header, request body, and the response field that holds the agent text before
+  relying on write mode. OpenCode Zen is used as a remote endpoint — no OpenCode
+  binary runs on the runner, so the agent cannot directly mutate repo files; in
+  write mode the response is captured as an artifact + comment (auto-applying a patch
+  requires parsing the diff from the response, currently TODO).
 
 ## 7. Cost-control recommendations
 
@@ -109,12 +120,16 @@ No slash-command trigger is implemented (no safe existing convention); all runs 
 
 ## 8. Troubleshooting
 
-- **Missing OpenCode binary**: workflow fails at `install-opencode.sh`. Confirm
-  `OPencode_VERSION` and the download URL in that script; replace with the official
-  pinned install method.
+- **Missing OpenCode binary**: no longer used — OpenCode Zen is called as a remote
+  endpoint. If you still see an install step, you are on an old version; the workflow
+  only needs `curl` (present on GitHub runners).
+- **Endpoint unreachable / 404**: check `OPENCODE_ZEN_ENDPOINT` (repo variable) is
+  the correct full URL. The request is a POST with `Authorization: Bearer
+  $OPENCODE_API_KEY` and a JSON body; confirm the path with OpenCode Zen docs.
+- **Wrong model**: check `OPENCODE_MODEL` (repo variable). It is sent in the request
+  `model` field; change it without editing tracked files.
 - **Invalid Zen credential**: agent step fails with auth error. Re-check the
-  `OPENCODE_API_KEY` secret; confirm the env var name mapping in
-  `run-opencode-agent.sh` (`OC_ZEN_TOKEN_VAR`).
+  `OPENCODE_API_KEY` secret; confirm the env var name in `run-opencode-agent.sh`.
 - **Token permissions**: "Resource not accessible" on comment/push → ensure the
   workflow `permissions:` block matches the action (pull-requests: write to comment;
   contents: write to push) and the actor has repo write.
