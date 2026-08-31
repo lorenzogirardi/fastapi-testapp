@@ -64,8 +64,8 @@ Job timeline (verified, `gh run view 33270177709`):
 | `conclusion` | 19:13:48Z | 19:14:00Z | success |
 
 Interpretation: the run passed all gh-aw gates, the agent produced a review, and the
-`safe_outputs` stage successfully posted the PR comment. The LLM path to OpenCode Zen
-(`hy3-free`) worked end-to-end. This is the **proven** invocation referenced
+`safe_outputs` stage successfully posted the PR comment. The LLM path to OpenRouter
+(`~deepseek/deepseek-v4-flash-latest`) worked end-to-end. This is the **proven** invocation referenced
 throughout the other docs.
 
 ```mermaid
@@ -73,7 +73,7 @@ flowchart LR
   PR[PR #8 opened] --> Run[Run 33270177709]
   Run --> PA[pre_activation ok]
   PA --> AC[activation ok]
-  AC --> AG[agent: review via Zen/hy3-free]
+  AC --> AG[agent: review via OpenRouter/~deepseek/deepseek-v4-flash-latest]
   AG --> SO[safe_outputs: post comment]
   SO --> C[AI review comment on PR #8]
   C --> H[Human reviewer]
@@ -130,8 +130,8 @@ must verify. This validates the operating-model principle that the agent output 
 
 ## 7. Lessons learned (repository-specific)
 
-- **The system works end-to-end.** PR #8 is proof that `gh-aw` + OpenCode Zen
-  (`hy3-free`) via the Copilot BYOK route produces a useful, posted review.
+- **The system works end-to-end.** PR #8 is proof that `gh-aw` + OpenRouter
+  (`~deepseek/deepseek-v4-flash-latest`) via the Copilot BYOK route produces a useful, posted review.
 - **Human review is non-negotiable.** The agent both caught real issues and stated a
   partially wrong fact; only a person can adjudicate.
 - **Prompts shape value.** The read-only, evidence-required prompt produced

@@ -26,20 +26,20 @@ not by broadening the token. *(Verified from frontmatter `permissions:` blocks.)
 
 ## Secret handling
 
-- Secret names referenced: `OPENCODE_API_KEY` (passed to the engine as
+- Secret names referenced: `OPENROUTER_API_KEY` (passed to the engine as
   `COPILOT_PROVIDER_API_KEY`). *(Verified in every workflow `.md`.)*
 - The gh-aw manifest also lists `COPILOT_GITHUB_TOKEN`, `GH_AW_GITHUB_TOKEN`,
   `GH_AW_GITHUB_MCP_SERVER_TOKEN`, `GITHUB_TOKEN`. *(Verified in lock manifest.)*
 - Secrets are injected into the AWF sidecar (api-proxy) and **not** exposed to the
   agent container. *(Inferred from gh-aw design; consistent with earlier run
-  observation that `OPENCODE_API_KEY` was not present in the agent job env dump.)*
+  observation that `OPENROUTER_API_KEY` was not present in the agent job env dump.)*
 - **No secret values are reproduced in this documentation.**
 
 ## Fork PR and external-contributor policy
 
 - `ai-pr-review` triggers on `pull_request` for all PRs, including forks. gh-aw
   handles fork secrets specially (secrets are withheld from fork PRs by GitHub
-  default), so a fork PR would run the agent **without** `OPENCODE_API_KEY` and
+  default), so a fork PR would run the agent **without** `OPENROUTER_API_KEY` and
   would fail LLM calls — a safe failure. *(Inferred from GitHub + gh-aw behavior;
   not explicitly tested here.)*
 - The manual-dispatch workflows take a `pr_number`/`issue_number` documented as
@@ -66,13 +66,13 @@ The prompts explicitly treat repository/event content as untrusted. This is a
 
 ## Data classification / outbound exposure
 
-- The PR diff, code, and PR/issue text are sent to **OpenCode Zen** (`hy3-free`)
+- The PR diff, code, and PR/issue text are sent to **OpenRouter** (`~deepseek/deepseek-v4-flash-latest`)
   as model context. *(Verified routing.)*
 - Network egress from the agent enclave is limited to `network.allowed`:
-  `github.com`, `opencode.ai` (and `raw.githubusercontent.com` for diagnose).
+  `github.com`, `openrouter.ai` (and `raw.githubusercontent.com` for diagnose).
   *(Verified frontmatter.)*
 - No evidence that data is retained by the provider beyond inference; retention is
-  a provider/policy concern. *(Unknown — verify with OpenCode Zen terms.)*
+  a provider/policy concern. *(Unknown — verify with OpenRouter terms.)*
 
 ## Agent tool restrictions and network access
 
@@ -110,8 +110,9 @@ force-push or rewrite history.
 
 - `timeout-minutes`: 20 / 20 / 30 / 40 per workflow. *(Verified.)*
 - `models.default-ai-credits-pricing`: `{input: 3.0, output: 15.0}` provides a
-  fallback rate for `hy3-free` (the proxy rejects unknown models without it).
-  *(Verified.)*
+  fallback rate the proxy requires for a BYOK model (it rejects unknown models
+  without it). This is a conservative over-estimate; DeepSeek V4 Flash's real
+  OpenRouter rate is lower. *(Verified.)*
 - Invocation is rate-limited by `concurrency` per PR/issue. *(Verified.)*
 - Actual token/cost measurement from the provider is **not** currently captured in
   repo docs. *(Unknown — see improvements.)*
@@ -120,7 +121,7 @@ force-push or rewrite history.
 
 1. Disable the workflow from the GitHub UI (**Settings → Actions → General →
    Disable workflows**), or delete/empty the `.md` source and recompile.
-2. Rotate `OPENCODE_API_KEY` if exposure is suspected.
+2. Rotate `OPENROUTER_API_KEY` if exposure is suspected.
 3. For a softer stop, remove the `pull_request` trigger from `ai-pr-review.md` and
    recompile, leaving only manual dispatch.
 
@@ -139,8 +140,8 @@ force-push or rewrite history.
 
 | Data | Flows to | Risk | Control |
 |---|---|---|---|
-| PR diff / code | OpenCode Zen (hy3-free) | Confidentiality of repo content | Provider trust; egress filtered |
-| `OPENCODE_API_KEY` | api-proxy sidecar → Zen | Credential exposure | Sidecar-held, not in agent env |
+| PR diff / code | OpenRouter (~deepseek/deepseek-v4-flash-latest) | Confidentiality of repo content | Provider trust; egress filtered |
+| `OPENROUTER_API_KEY` | api-proxy sidecar → OpenRouter | Credential exposure | Sidecar-held, not in agent env |
 | PR comment content | GitHub (public PR) | Info disclosure | Safe-output gate; human reads before merge |
 | Tool calls (gh) | GitHub API | Privilege abuse | Read-scoped token; MCP gateway |
 

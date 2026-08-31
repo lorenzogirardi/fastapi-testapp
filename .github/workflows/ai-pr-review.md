@@ -22,14 +22,14 @@ models:
 engine:
   id: copilot
   env:
-    COPILOT_PROVIDER_BASE_URL: "https://opencode.ai/zen/v1"
-    COPILOT_PROVIDER_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
+    COPILOT_PROVIDER_BASE_URL: ${{ vars.OPENROUTER_BASE_URL }}
+    COPILOT_PROVIDER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
     COPILOT_PROVIDER_WIRE_API: "completions"
-model: copilot/hy3-free
+    COPILOT_MODEL: ${{ vars.OPENROUTER_MODEL }}
 network:
   allowed:
     - github.com
-    - opencode.ai
+    - openrouter.ai
 safe-outputs:
   add-comment: null
   threat-detection: false

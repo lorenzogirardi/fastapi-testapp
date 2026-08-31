@@ -100,7 +100,7 @@ R=Responsible, A=Accountable, C=Consulted.
 | False positives / low-value review | Tune the prompt in the `.md` source; recompile |
 | Unsafe proposed change | Reject; rely on read-only default for review |
 | Stuck / failing run | Re-run; inspect `agent` artifact logs (`agent-stdio.log`, `awf-config.json`) |
-| Secret exposure concern | Rotate `OPENCODE_API_KEY`; review run artifacts for leakage |
+| Secret exposure concern | Rotate `OPENROUTER_API_KEY`; review run artifacts for leakage |
 | Model/provider outage | Workflow fails safely (no writes); fall back to manual review |
 
 ## Repeat runs / idempotency
