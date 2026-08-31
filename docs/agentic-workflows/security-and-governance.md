@@ -69,8 +69,9 @@ The prompts explicitly treat repository/event content as untrusted. This is a
 - The PR diff, code, and PR/issue text are sent to **OpenRouter** (`~deepseek/deepseek-v4-flash-latest`)
   as model context. *(Verified routing.)*
 - Network egress from the agent enclave is limited to `network.allowed`:
-  `github.com`, `openrouter.ai` (and `raw.githubusercontent.com` for diagnose).
-  *(Verified frontmatter.)*
+  `github.com`, `openrouter.ai`, and the `python` ecosystem bundle (PyPI /
+  `files.pythonhosted.org` / conda mirrors) so the agent can `pip install` and run
+  the project's `pytest` / `flake8` checks. *(Verified frontmatter.)*
 - No evidence that data is retained by the provider beyond inference; retention is
   a provider/policy concern. *(Unknown — verify with OpenRouter terms.)*
 

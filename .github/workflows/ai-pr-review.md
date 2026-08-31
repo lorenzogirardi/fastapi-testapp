@@ -30,6 +30,7 @@ network:
   allowed:
     - github.com
     - openrouter.ai
+    - python
 safe-outputs:
   add-comment: null
   threat-detection: false

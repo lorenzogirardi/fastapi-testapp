@@ -34,6 +34,7 @@ network:
   allowed:
     - github.com
     - openrouter.ai
+    - python
 safe-outputs:
   add-comment: null
   update-pull-request: null

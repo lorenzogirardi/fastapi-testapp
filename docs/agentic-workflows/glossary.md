@@ -62,8 +62,10 @@ workflows.
 (`~deepseek/deepseek-v4-flash-latest`); injected as `COPILOT_MODEL`. Change the
 model without recompiling the workflows.
 
-**`network.allowed`** — Egress allowlist for the AWF enclave (e.g. `github.com`,
-`openrouter.ai`). Limits where the agent can send requests.
+**`network.allowed`** — Egress allowlist for the AWF enclave: `github.com`,
+`openrouter.ai`, and the `python` ecosystem bundle (PyPI etc., for `pip install`
+during test runs). Entries can be individual domains or ecosystem shorthands.
+Limits where the agent can send requests.
 
 **`threat-detection`** — An optional gh-aw sub-agent that scans agent output for
 threats. Disabled (`false`) in this repo's workflows; see security doc.
