@@ -13,12 +13,12 @@ implemented in this repository. It is intended for both technical teams
 
 | Field | Value |
 |---|---|
-| Workflow engine | `github/gh-aw` (GitHub Agentic Workflows), compiler `v0.86.2` |
+| Workflow engine | `github/gh-aw` (GitHub Agentic Workflows), compiler `v0.87.10` |
 | Agentic workflows (source) | `.github/workflows/ai-pr-review.md`, `ai-ci-diagnose.md`, `ai-fix-pr.md`, `ai-issue-to-draft-pr.md` |
 | Generated workflows | `.github/workflows/*.lock.yml` (produced by `gh aw compile`) |
-| Engine / model | `engine: copilot`, `model: copilot/hy3-free` (LLM calls routed via BYOK to OpenCode Zen) |
-| LLM provider boundary | OpenCode Zen endpoint `https://opencode.ai/zen/v1` (OpenAI-compatible `completions` wire format) |
-| Auth to provider | repository secret `OPENCODE_API_KEY` (name only; value not shown) |
+| Engine / model | `engine: copilot`; model via `COPILOT_MODEL=${{ vars.OPENROUTER_MODEL }}` (value `~deepseek/deepseek-v4-flash-latest`), routed via BYOK to OpenRouter |
+| LLM provider boundary | OpenRouter endpoint `https://openrouter.ai/api/v1` (OpenAI-compatible `completions` wire format), set from repo variable `OPENROUTER_BASE_URL` |
+| Auth to provider | repository secret `OPENROUTER_API_KEY` (name only; value not shown) |
 | Operating mode | Human-in-the-loop, read-biased assistance with gated safe-outputs |
 | Repository owner responsibility | Approval, merge, release, and all policy/compliance decisions remain human |
 
@@ -27,8 +27,8 @@ implemented in this repository. It is intended for both technical teams
 The repository uses GitHub Agentic Workflows to run AI "agents" that help with
 routine software-engineering tasks — reviewing pull requests, explaining why CI
 failed, proposing code changes, and turning issues into draft pull requests.
-The agent is powered by a large language model (here, `hy3-free` served through
-OpenCode Zen), but it is **not autonomous**: it can read code and post comments,
+The agent is powered by a large language model (here, DeepSeek V4 Flash served
+through OpenRouter), but it is **not autonomous**: it can read code and post comments,
 and only performs write actions through tightly gated "safe outputs" that the
 platform controls. A human always reviews and decides whether to merge.
 
@@ -68,7 +68,7 @@ flowchart LR
   C --> D[GitHub Actions run]
   D --> E[pre_activation: auth/guardrails]
   E --> F[activation: build prompt + context]
-  F --> G[agent job: coding agent calls OpenCode Zen]
+  F --> G[agent job: coding agent calls OpenRouter]
   G --> H[safe_outputs: post comment / PR]
   H --> I[Human reviewer reads comment]
   I --> J[Merge or reject by human]

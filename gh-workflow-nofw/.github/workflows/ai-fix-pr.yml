@@ -1,0 +1,194 @@
+name: AI Fix PR
+
+on:
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: "Existing PR number to modify"
+        required: true
+      instruction:
+        description: "Narrowly scoped fix instruction (maintainer-provided)"
+        required: true
+      dry_run:
+        description: "Propose only, do not push (default true)"
+        required: false
+        default: true
+        type: boolean
+
+# Manual-only, authorized-only. contents:write is required for the (gated) push;
+# the push step additionally requires AI_AGENT_WRITE_ENABLED=true.
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: ai-fix-pr-${{ inputs.pr_number }}
+  cancel-in-progress: false
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
+      OPENCODE_ZEN_ENDPOINT: ${{ vars.OPENCODE_ZEN_ENDPOINT }}
+      OPENCODE_MODEL: ${{ vars.OPENCODE_MODEL }}
+    steps:
+      - name: Authorize actor
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ACTOR: ${{ github.actor }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          perm=$(gh api "repos/$REPO/collaborators/$ACTOR/permission" --jq '.permission' 2>/dev/null || echo "none")
+          case "$perm" in
+            admin|maintain|write) echo "authorized: $perm" ;;
+            *) echo "denied: actor '$ACTOR' has permission '$perm'"; exit 1 ;;
+          esac
+
+      - name: Resolve PR + reject forks
+        id: pr
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ inputs.pr_number }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          data=$(gh pr view "$PR_NUMBER" --json headRefOid,headRefName,baseRefName,headRepositoryOwner,headRepositoryName,isCrossRepository)
+          head="$(echo "$data" | jq -r .headRefOid)"
+          head_branch="$(echo "$data" | jq -r .headRefName)"
+          base="$(echo "$data" | jq -r .baseRefName)"
+          cross="$(echo "$data" | jq -r .isCrossRepository)"
+          full="$(echo "$data" | jq -r '.headRepositoryOwner.login + "/" + .headRepositoryName')"
+          if [ "$cross" = "true" ] || [ "$full" != "$REPO" ]; then
+            echo "PR $PR_NUMBER originates from a fork/externally-owned repo ($full) — refusing to push." >&2
+            exit 1
+          fi
+          echo "head_sha=$head" >> "$GITHUB_OUTPUT"
+          echo "head_branch=$head_branch" >> "$GITHUB_OUTPUT"
+          echo "base_ref=$base" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout PR head branch
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ steps.pr.outputs.head_sha }}
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+
+      - name: Compose prompt (instruction + diff as untrusted data)
+        env:
+          INSTRUCTION: ${{ inputs.instruction }}
+        run: |
+          set -euo pipefail
+          printf '%s' "$INSTRUCTION" > /tmp/instruction.txt
+          {
+            cat .github/ai/prompts/pr-fix.md
+            echo ""
+            echo "## Maintainer instruction (trusted, this run only)"
+            echo '```'
+            cat /tmp/instruction.txt
+            echo '```'
+            echo ""
+            echo "## Current PR diff vs base (untrusted data)"
+            echo '```diff'
+            git diff "origin/${{ steps.pr.outputs.base_ref }}..."HEAD || true
+            echo '```'
+          } > /tmp/prompt.md
+
+      - name: Decide mode (dry-run unless explicitly enabled)
+        id: mode
+        env:
+          DRY: ${{ inputs.dry_run }}
+          WRITE_ENABLED: ${{ vars.AI_AGENT_WRITE_ENABLED }}
+        run: |
+          set -euo pipefail
+          if [ "$DRY" = "false" ] && [ "$WRITE_ENABLED" = "true" ]; then
+            echo "mode=write-scoped" >> "$GITHUB_OUTPUT"
+          else
+            echo "mode=dry-run" >> "$GITHUB_OUTPUT"
+            [ "$DRY" = "true" ] || echo "note: write requested but AI_AGENT_WRITE_ENABLED != 'true' -> forced dry-run"
+          fi
+
+      - name: Run OpenCode fix
+        id: agent
+        run: |
+          set -euo pipefail
+          bash .github/scripts/run-opencode-agent.sh \
+            --mode "${{ steps.mode.outputs.mode }}" \
+            --prompt-file /tmp/prompt.md \
+            --context-dir "$PWD" \
+            --max-turns 20 > /tmp/fix.md
+          echo "bytes=$(wc -c < /tmp/fix.md)" >> "$GITHUB_OUTPUT"
+
+      - name: Guard protected paths
+        id: guard
+        run: |
+          set -euo pipefail
+          changed=$(git status --porcelain | awk '{print $2}')
+          protected=0
+          echo "$changed" | grep -E '^(\.github/workflows/|\.github/actions/|\.github/ai/)' && protected=1 || true
+          echo "changed_files<<EOF" >> "$GITHUB_OUTPUT"
+          echo "$changed" >> "$GITHUB_OUTPUT"
+          echo "EOF" >> "$GITHUB_OUTPUT"
+          echo "protected=$protected" >> "$GITHUB_OUTPUT"
+
+      - name: Upload proposed patch (dry-run / always)
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: ai-fix-pr-${{ inputs.pr_number }}-patch
+          path: /tmp/fix.md
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Commit & push (write mode only)
+        if: >-
+          steps.mode.outputs.mode == 'write-scoped' &&
+          steps.guard.outputs.protected != '1'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          HEAD_REF: ${{ steps.pr.outputs.head_sha }}
+        run: |
+          set -euo pipefail
+          git config user.name "ai-agent[bot]"
+          git config user.email "ai-agent@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "no changes to commit"; exit 0
+          fi
+          git commit -m "ai(fix): scoped change for PR #${{ inputs.pr_number }} (write mode, human review required)"
+          git push origin "HEAD:refs/heads/${{ steps.pr.outputs.head_branch }}" --no-force
+
+      - name: Blocked by protected-path guard
+        if: steps.mode.outputs.mode == 'write-scoped' && steps.guard.outputs.protected == '1'
+        run: |
+          echo "Refusing to push: protected paths were modified:" >&2
+          echo "${{ steps.guard.outputs.changed_files }}" >&2
+          exit 1
+
+      - name: Post / update PR comment
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          ISSUE: ${{ inputs.pr_number }}
+        run: |
+          set -euo pipefail
+          { echo "**Mode:** ${{ steps.mode.outputs.mode }}"; echo ""; cat /tmp/fix.md; } > /tmp/fix-comment.md
+          bash .github/scripts/upsert-marker-comment.sh \
+            --repo "$REPO" \
+            --issue "$ISSUE" \
+            --marker "<!-- ai-agent:pr-fix -->" \
+            --body-file /tmp/fix-comment.md
