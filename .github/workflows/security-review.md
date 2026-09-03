@@ -6,7 +6,7 @@ on:
       max_skills:
         description: "Max skills to select and apply"
         required: false
-        default: "50"
+        default: "30"
       smart_select:
         description: "Phase 1 = LLM skill selection (false = keyword scoring only)"
         required: false
@@ -52,6 +52,17 @@ steps:
         /tmp/gh-aw/skills-lib
       echo "skills-lib @ $SKILLS_REF -> $(git -C /tmp/gh-aw/skills-lib rev-parse HEAD)"
       echo "skill count: $(ls /tmp/gh-aw/skills-lib/skills | wc -l)"
+post-steps:
+  - name: Publish report to run summary
+    if: always()
+    run: |
+      f="${GITHUB_WORKSPACE}/security-review.md"
+      if [ -s "$f" ]; then
+        cat "$f" >> "$GITHUB_STEP_SUMMARY"
+      else
+        echo "## Security Review" >> "$GITHUB_STEP_SUMMARY"
+        echo "No \`security-review.md\` produced — see the agent logs / artifact." >> "$GITHUB_STEP_SUMMARY"
+      fi
 safe-outputs:
   upload-artifact:
     allowed-paths:
@@ -114,7 +125,7 @@ do not fetch skills over the network.
 1. Build a file tree of the repo and read up to ~40,000 characters of
    representative source (entrypoints, routes, auth, config, data access).
 2. Considering the `STACK`, that source, and every skill `name + description`,
-   select the **top N** skills — `N` = the `max_skills` input (default 50) —
+   select the **top N** skills — `N` = the `max_skills` input (default 30) —
    whose methodology can be applied by **reading this source**.
 3. Exclude skills that need a live target, a memory dump, a running agent, or a
    cloud tenant: forensics, C2, Falco, container-escape, mimikatz, Active
