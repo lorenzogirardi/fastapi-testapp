@@ -89,5 +89,6 @@ flowchart LR
 - [architecture.md](architecture.md) — technical architecture, diagrams, data flow
 - [operating-model.md](operating-model.md) — triggers, lifecycle, responsibilities, definitions of done
 - [security-and-governance.md](security-and-governance.md) — controls, threat model, cost/audit
+- [custom-skills-and-agents.md](custom-skills-and-agents.md) — plug skill playbooks and sub-agents into a gh-aw workflow
 - [case-study-pr-8.md](case-study-pr-8.md) — evidence-based analysis of PR #8
 - [glossary.md](glossary.md) — terms and definitions
