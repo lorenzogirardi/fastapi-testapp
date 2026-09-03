@@ -21,8 +21,8 @@ concurrency:
 timeout-minutes: 30
 models:
   default-ai-credits-pricing:
-    input: 3.0
-    output: 15.0
+    input: 0.05
+    output: 0.16
 engine:
   id: copilot
   env:
