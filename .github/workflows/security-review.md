@@ -23,7 +23,7 @@ permissions:
 concurrency:
   group: security-review-${{ github.ref }}
   cancel-in-progress: true
-timeout-minutes: 40
+timeout-minutes: 55
 models:
   default-ai-credits-pricing:
     input: 0.05
@@ -147,7 +147,7 @@ State which mode ran.
 
 # Phase 2 — Skill application
 
-Collect up to ~200,000 characters of source across all languages, skipping
+Collect up to ~120,000 characters of source across all languages, skipping
 `.git`, `node_modules`, `.venv`, `venv`, `__pycache__`, `dist`, `build`,
 `vendor`, `.terraform`, `site-packages`.
 
@@ -187,7 +187,7 @@ Exact structure (emit this shape directly, unfenced):
 # Security Review: <owner/repo> @ <short-sha>
 
 **Date:** <UTC timestamp>  ·  **Model:** <model id>  ·  **Selection:** smart | keyword
-**Skills evaluated:** <n>  ·  **Findings:** <total>
+**Skills applied:** <count of skills you actually ran, = max_skills>  ·  **Findings:** <total>
 
 ## 1. Stack
 | Aspect | Finding | Evidence |
