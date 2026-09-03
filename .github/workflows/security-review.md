@@ -6,7 +6,7 @@ on:
       max_skills:
         description: "Max skills to select and apply"
         required: false
-        default: "20"
+        default: "12"
       smart_select:
         description: "Phase 1 = LLM skill selection (false = keyword scoring only)"
         required: false
@@ -125,14 +125,31 @@ do not fetch skills over the network.
 1. Build a file tree of the repo and read up to ~40,000 characters of
    representative source (entrypoints, routes, auth, config, data access).
 2. Considering the `STACK`, that source, and every skill `name + description`,
-   select the **top N** skills — `N` = the `max_skills` input (default 20) —
+   select the **top N** skills — `N` = the `max_skills` input (default 12) —
    whose methodology can be applied by **reading this source**.
 3. Exclude skills that need a live target, a memory dump, a running agent, or a
    cloud tenant: forensics, C2, Falco, container-escape, mimikatz, Active
    Directory, Ghidra, malware analysis, post-exploitation, lateral movement,
    GCP / Google Workspace / Office 365 / Azure AD.
-4. Rank most-relevant first. One line per skill on why it fits (cite `STACK` or a
-   `file:line`).
+4. **Coverage mix (mandatory).** The selected set must be
+   **application-layer first**. Classify each candidate:
+   - *Application / code* — authn & authz logic, broken access control / IDOR /
+     BOLA / BOPLA, injection (SQL/NoSQL/command/LDAP), SSRF, XXE, insecure
+     deserialization, SSTI / template injection, path traversal, open redirect,
+     mass assignment, business-logic abuse, JWT / session / OAuth handling,
+     CORS, CSRF, unsafe crypto in code, input validation, secrets in source,
+     rate-limiting logic, error handling / info disclosure, unsafe subprocess /
+     file handling, API-schema abuse.
+   - *Infrastructure / supply chain* — Dockerfile, Kubernetes / Helm, Terraform,
+     CI/CD workflow hardening, image / dependency / SBOM scanning, base-image
+     and provenance checks.
+   At least **⌈0.7·N⌉** of the selected skills must be *Application / code*, and
+   **at most ⌊0.3·N⌋** may be *Infrastructure / supply chain* (for N=12: ≥ 9
+   application, ≤ 3 infra). If the pre-filter leaves you short on
+   application-layer candidates, widen the search — do **not** backfill with
+   more infra skills.
+5. Rank most-relevant first. One line per skill on why it fits (cite `STACK` or a
+   `file:line`), and tag each `[app]` or `[infra]`.
 
 **If `smart_select` is `"false"`:**
 
@@ -141,7 +158,8 @@ Skip source reading. Score each skill by keyword overlap between its
 `sqlalchemy`, `docker`, `kubernetes`, `jwt`, `oauth`, `api security`,
 `injection`, `secret`, `ssrf`, `access control`, ...); subtract 2 per
 runtime-only keyword (list in step 3 above); keep skills scoring > 0; take the
-top N by score.
+top N by score — but still apply the **coverage mix** in step 4 (≥ ⌈0.7·N⌉
+application-layer, ≤ ⌊0.3·N⌋ infrastructure).
 
 State which mode ran.
 
@@ -187,7 +205,7 @@ Exact structure (emit this shape directly, unfenced):
 # Security Review: <owner/repo> @ <short-sha>
 
 **Date:** <UTC timestamp>  ·  **Model:** <model id>  ·  **Selection:** smart | keyword
-**Skills applied:** <count of skills you actually ran, = max_skills>  ·  **Findings:** <total>
+**Skills applied:** <count you ran, = max_skills> (<a> app / <b> infra)  ·  **Findings:** <total>
 
 ## 1. Stack
 | Aspect | Finding | Evidence |
@@ -215,8 +233,10 @@ Exact structure (emit this shape directly, unfenced):
 （repeat per finding, then the MEDIUM / LOW / INFO sections in the same shape）
 
 ## 4. Skills applied
-- `skill-name` — <n> finding(s)
+- `skill-name` `[app]` — <n> finding(s)
+- `skill-name` `[infra]` — <n> finding(s)
 ...
+State the app/infra split and confirm it meets the ≥70% application-layer rule.
 
 ## 5. Not applied / caveats
 - <skill> — <reason: timeout / not relevant after reading SKILL.md>
