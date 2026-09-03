@@ -37,7 +37,7 @@ from pathlib import Path
 SKILLS_REPO_URL = "https://github.com/mukul975/Anthropic-Cybersecurity-Skills"
 
 DEFAULT_OPENROUTER_BASE = "https://openrouter.ai/api/v1"
-DEFAULT_OPENROUTER_MODEL = "deepseek/deepseek-chat-v4-flash"
+DEFAULT_OPENROUTER_MODEL = "deepseek/deepseek-v4-flash-0731"
 DEFAULT_ANTHROPIC_MODEL = "claude-sonnet-4-5"
 
 # marker file (or glob) -> stack label
@@ -524,8 +524,12 @@ def resolve_client(args) -> LLMClient:
     if not key:
         sys.exit("OPENROUTER_API_KEY not set")
     base = os.environ.get("OPENROUTER_BASE_URL", DEFAULT_OPENROUTER_BASE)
-    model = (args.model or os.environ.get("OPENROUTER_MODEL")
-             or DEFAULT_OPENROUTER_MODEL).lstrip("~")
+    env_model = os.environ.get("OPENROUTER_MODEL", "")
+    # gh-aw / Copilot alias syntax ("~vendor/model-latest") is not a callable
+    # OpenRouter model id — ignore it and fall back to a pinned slug.
+    if env_model.startswith("~") or env_model.endswith("-latest"):
+        env_model = ""
+    model = args.model or env_model or DEFAULT_OPENROUTER_MODEL
     return LLMClient("openrouter", model, base, key)
 
 

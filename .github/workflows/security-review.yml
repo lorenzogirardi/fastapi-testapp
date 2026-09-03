@@ -19,6 +19,10 @@ on:
         description: "Max skills to select and apply"
         required: false
         default: "50"
+      model:
+        description: "OpenRouter model id"
+        required: false
+        default: "deepseek/deepseek-v4-flash-0731"
       smart_select:
         description: "Phase-1 LLM skill selection (false = keyword fallback only)"
         required: false
@@ -69,7 +73,6 @@ jobs:
         env:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           OPENROUTER_BASE_URL: ${{ vars.OPENROUTER_BASE_URL }}
-          OPENROUTER_MODEL: ${{ vars.OPENROUTER_MODEL }}
         run: |
           SMART=""
           if [ "${{ inputs.smart_select }}" != "true" ]; then SMART="--no-smart-select"; fi
@@ -77,6 +80,7 @@ jobs:
             --project     target \
             --skills-dir   skills-lib \
             --provider     openrouter \
+            --model        "${{ inputs.model }}" \
             --max-skills   "${{ inputs.max_skills }}" \
             --output       "$GITHUB_WORKSPACE/security-review.md" \
             $SMART
