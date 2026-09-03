@@ -6,7 +6,7 @@ on:
       max_skills:
         description: "Max skills to select and apply"
         required: false
-        default: "30"
+        default: "20"
       smart_select:
         description: "Phase 1 = LLM skill selection (false = keyword scoring only)"
         required: false
@@ -125,7 +125,7 @@ do not fetch skills over the network.
 1. Build a file tree of the repo and read up to ~40,000 characters of
    representative source (entrypoints, routes, auth, config, data access).
 2. Considering the `STACK`, that source, and every skill `name + description`,
-   select the **top N** skills — `N` = the `max_skills` input (default 30) —
+   select the **top N** skills — `N` = the `max_skills` input (default 20) —
    whose methodology can be applied by **reading this source**.
 3. Exclude skills that need a live target, a memory dump, a running agent, or a
    cloud tenant: forensics, C2, Falco, container-escape, mimikatz, Active
@@ -172,14 +172,14 @@ Aggregate all findings and sort HIGH → MEDIUM → LOW → INFO.
 
 **Delivery — do exactly this:**
 
-1. Your **final assistant message MUST BE the complete report**, as raw
-   GitHub-Flavored Markdown. Do **not** wrap it in a ``` code fence. Do **not**
-   replace it with a summary or a sentence like "the report was written to ...".
-   gh-aw copies your final message verbatim into the GitHub Actions **run
-   summary**, so the final message must literally be the report.
-2. Also write the identical Markdown to `${GITHUB_WORKSPACE}/security-review.md`
-   and call the **`upload_artifact`** safe-output tool with that path, so the
+1. Write the complete report as raw GitHub-Flavored Markdown to
+   `${GITHUB_WORKSPACE}/security-review.md`. A post-step publishes this file to
+   the GitHub Actions **run summary**, so it must be the full report — not a
+   summary, not a "written to file" note.
+2. Call the **`upload_artifact`** safe-output tool with that same path so the
    report is also attached to the run as a downloadable artifact.
+3. Your final assistant message should be the same report text (or a short
+   pointer to it); it is not the primary delivery channel.
 
 Exact structure (emit this shape directly, unfenced):
 
