@@ -11,6 +11,10 @@ on:
         description: "Phase 1 = LLM skill selection (false = keyword scoring only)"
         required: false
         default: "true"
+      skills_ref:
+        description: "Anthropic Cybersecurity Skills tag to pin (bump to adopt new skills)"
+        required: false
+        default: "v1.3.0"
   schedule:
     # Monthly re-review so the report tracks the codebase.
     - cron: "0 6 1 * *"
@@ -34,16 +38,20 @@ engine:
 network:
   allowed:
     - github.com
-    - raw.githubusercontent.com
     - openrouter.ai
     - python
 steps:
-  - name: Clone Anthropic Cybersecurity Skills library
+  - name: Clone Anthropic Cybersecurity Skills library (pinned tag)
+    env:
+      # Pinned so a run only sees new/changed skills when this tag is bumped.
+      # v1.3.0 = commit 101ca0bd887a295e39cc20a100efa571937ca969
+      SKILLS_REF: ${{ inputs.skills_ref || 'v1.3.0' }}
     run: |
-      git clone --depth 1 \
+      git clone --depth 1 --branch "$SKILLS_REF" \
         https://github.com/mukul975/Anthropic-Cybersecurity-Skills \
         /tmp/gh-aw/skills-lib
-      echo "skills: $(ls /tmp/gh-aw/skills-lib/skills | wc -l)"
+      echo "skills-lib @ $SKILLS_REF -> $(git -C /tmp/gh-aw/skills-lib rev-parse HEAD)"
+      echo "skill count: $(ls /tmp/gh-aw/skills-lib/skills | wc -l)"
 safe-outputs:
   upload-artifact:
     allowed-paths:
@@ -94,9 +102,10 @@ each item with a `file:line`.
 
 # Step 1 — Skill library
 
-`/tmp/gh-aw/skills-lib` is the cloned library. Read
-`/tmp/gh-aw/skills-lib/index.json` — a JSON array of `{name, description, path}`
-for ~818 skills.
+`/tmp/gh-aw/skills-lib` is the library, cloned at a **pinned tag** by a
+pre-step. Read `/tmp/gh-aw/skills-lib/index.json` — a JSON array of
+`{name, description, path}` for ~818 skills. Use **only** this local checkout;
+do not fetch skills over the network.
 
 # Phase 1 — Skill selection
 
@@ -150,15 +159,20 @@ For each selected skill, in ranked order:
 
 Aggregate all findings and sort HIGH → MEDIUM → LOW → INFO.
 
-Produce the report as your **final message** — gh-aw publishes it to the GitHub
-Actions **run summary**. Then write the identical Markdown to
-`${GITHUB_WORKSPACE}/security-review.md` and call the **`upload_artifact`**
-safe-output tool with that path so the report is attached to the run as a
-downloadable artifact.
+**Delivery — do exactly this:**
 
-Exact structure:
+1. Your **final assistant message MUST BE the complete report**, as raw
+   GitHub-Flavored Markdown. Do **not** wrap it in a ``` code fence. Do **not**
+   replace it with a summary or a sentence like "the report was written to ...".
+   gh-aw copies your final message verbatim into the GitHub Actions **run
+   summary**, so the final message must literally be the report.
+2. Also write the identical Markdown to `${GITHUB_WORKSPACE}/security-review.md`
+   and call the **`upload_artifact`** safe-output tool with that path, so the
+   report is also attached to the run as a downloadable artifact.
 
-```markdown
+Exact structure (emit this shape directly, unfenced):
+
+```
 # Security Review: <owner/repo> @ <short-sha>
 
 **Date:** <UTC timestamp>  ·  **Model:** <model id>  ·  **Selection:** smart | keyword
