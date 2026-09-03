@@ -7,6 +7,18 @@ repo as the worked example.
 **Confidence legend:** *(Verified)* observed in this repo's workflow files / run
 metadata; *(Docs)* from `github.github.io/gh-aw`; *(Recommended)* guidance.
 
+### Worked example — `security-review` as tuned *(Verified, run 33766554943)*
+
+| Setting | Value | Why |
+|---|---|---|
+| Skill source | `mukul975/Anthropic-Cybersecurity-Skills` cloned in a pre-step, pinned `--branch v1.3.0` | reproducible; new skills only on a tag bump |
+| `max_skills` | `12` (input default) | ~28 min run with DeepSeek V4 Flash + 120k source |
+| Coverage mix | ≥ ⌈0.7·N⌉ application-layer, ≤ ⌊0.3·N⌋ infra (prompt-enforced) | keep it a code review, not an infra scan (§2d) |
+| `timeout-minutes` | `55` | a mid-run provider stall of ~14 min was observed; 40 min was not enough (§7) |
+| Source budget | ~120k chars in the prompt | shorter per-skill calls |
+| Report delivery | `post-steps:` cats `security-review.md` into `$GITHUB_STEP_SUMMARY` + `upload-artifact` safe-output | the agent's final message is **not** what gh-aw puts in the summary (§5) |
+| Model | `COPILOT_MODEL=${{ vars.OPENROUTER_MODEL }}` = `~deepseek/deepseek-v4-flash-latest` | the `~…-latest` alias resolves inside the Copilot CLI (§7) |
+
 ---
 
 ## 1. Two things people mean by "skill"
@@ -116,6 +128,37 @@ imports:
 *(Docs)* Cross-repo imports match `owner/repo/path@ref` and are cached by commit
 SHA — always pin `@<tag-or-sha>`.
 
+### 2d. Steering which skills the agent picks *(Verified)*
+
+A big library (800+ skills) needs guidance or the agent drifts — early
+`security-review` runs came back almost entirely infrastructure skills
+(K8s, Helm, secret-scanning, image tags) and missed the application logic.
+
+Two levers, both in the prompt:
+
+1. **Pre-filter deterministically**, then let the model rank. Have the agent
+   `grep` the `index.json` for the stack's vocabulary and an offensive/runtime
+   denylist *before* it reasons — cuts 800 candidates to a few dozen.
+2. **Enforce a coverage mix.** Make the agent classify each candidate and hold a
+   ratio:
+
+   ```markdown
+   Classify each candidate [app] or [infra].
+   [app]   = authz / IDOR / BOLA / BOPLA, injection, SSRF, XXE, deserialization,
+             SSTI, path traversal, mass assignment, business logic, JWT / session
+             / OAuth, CORS / CSRF, crypto-in-code, input validation, secrets in
+             source, rate-limit logic, error handling / info disclosure.
+   [infra] = Dockerfile, K8s / Helm, Terraform, CI hardening, image / dep / SBOM
+             scanning, provenance.
+   Select at least ceil(0.7*N) [app] and at most floor(0.3*N) [infra].
+   If short on [app] candidates, widen the search — do NOT backfill with infra.
+   Tag each selected skill [app]/[infra] in the report and state the split.
+   ```
+
+   Run 33766554943: 12 skills → 9 `[app]` / 3 `[infra]` (75%), 14 findings, the
+   HIGH/MEDIUM items were SSRF-guard-off, SSRF TOCTOU, unused rate limiter,
+   wildcard CORS, unauth CRUD, unauth error-injection — all application-layer.
+
 ---
 
 ## 3. Sub-agents and agent files
@@ -182,7 +225,7 @@ plain prompt text. Remote form:
 | Field | Purpose | Example |
 |---|---|---|
 | `steps:` / `pre-steps:` | Deterministic Actions steps **before** the agent (clone, setup, fetch inputs). | clone skills lib (§2a) |
-| `post-steps:` | Deterministic steps **after** the agent (e.g. `cat report.md >> "$GITHUB_STEP_SUMMARY"`). | belt-and-suspenders report delivery |
+| `post-steps:` | Deterministic steps **after** the agent, in the agent job. | **primary** way to get a report into the run summary (§5) |
 | `imports:` | Merge shared markdown / agent files / MCP config / frontmatter at compile. | `.github/skills/*.md`, `.github/agents/*.md` |
 | `{{#runtime-import path}}` | Inline a file into the prompt at render time (`?` = optional). | optional extra playbooks |
 | `tools:` | Enable `bash`, `edit`, `web-fetch`, `web-search`, `playwright`, `github` toolsets. | `bash: ["git","grep","rg"]` |
@@ -193,17 +236,35 @@ plain prompt text. Remote form:
 
 ---
 
-## 5. Delivering the result
+## 5. Delivering the result into the pipeline output
 
-The agent's **final message is copied verbatim into the GitHub Actions run
-summary**. *(Verified)* So:
+gh-aw's "Append agent step summary" step writes an **execution summary** (turns,
+tool calls, token usage) — **not** the agent's final message. *(Verified — run
+33756024920: the step ran, the report never appeared in the summary; it was only
+in the artifact.)* So a report will not show up in the run summary on its own.
 
-- To put a report in the pipeline output, make the agent's last message **be**
-  the report (raw Markdown, unfenced) — not a "written to file" sentence.
-- For a downloadable copy, also write the file and call the `upload_artifact`
-  safe-output tool with an `allowed-paths` entry matching the filename.
-- A `post-steps:` `cat <file> >> "$GITHUB_STEP_SUMMARY"` is a reliable fallback
-  if the model keeps summarising instead of emitting the full report.
+Do this instead:
+
+1. **Prompt:** the agent writes the full report to a file in the workspace, e.g.
+   `${GITHUB_WORKSPACE}/security-review.md`.
+2. **`post-steps:`** (runs in the agent job, after the agent) publishes it:
+
+   ```yaml
+   post-steps:
+     - name: Publish report to run summary
+       if: always()
+       run: |
+         f="${GITHUB_WORKSPACE}/security-review.md"
+         if [ -s "$f" ]; then cat "$f" >> "$GITHUB_STEP_SUMMARY"; fi
+   ```
+
+   `if: always()` means the report still lands even when the agent step is marked
+   failed (e.g. it hit `timeout-minutes` right after writing the file — §7).
+3. **`safe-outputs: upload-artifact`** for a downloadable copy — the agent calls
+   the `upload_artifact` tool with a path that matches `allowed-paths`.
+
+The agent's final message is then free to be a short pointer; it is not a
+delivery channel.
 
 ---
 
@@ -238,6 +299,21 @@ do not match the lock.
 - **Pin every external source** (skill library tag, cross-repo import `@ref`,
   container image) so a run is reproducible and only changes on an explicit
   bump. *(Verified for `security-review`)*
+- **`timeout-minutes` kills the agent step even mid-write.** GitHub Actions
+  SIGTERMs the step at the budget; the step goes red even if the agent had just
+  finished. A single silent provider stall (~14 min observed with DeepSeek V4
+  Flash on OpenRouter) can eat the budget. Mitigate: raise `timeout-minutes`,
+  cap the source you feed per skill, cut `max_skills`, and keep report delivery
+  in an `if: always()` `post-steps:`. *(Verified — run 33756024920 failed at 40
+  min; 55 min + 120k source + 12 skills succeeded in ~28 min, run 33766554943.)*
+- **Model-id alias.** `vars.OPENROUTER_MODEL` here is
+  `~deepseek/deepseek-v4-flash-latest`. The `~…-latest` form resolves inside the
+  Copilot CLI that gh-aw runs, but it is **not** a callable OpenRouter model id
+  if you ever hit the API directly (use e.g. `deepseek/deepseek-v4-flash-0731`).
+  *(Verified)*
+- **Runtime scales with `max_skills`.** Phase-2 is one model pass per selected
+  skill over the collected source. ~12 skills ≈ 28 min here; budget
+  `timeout-minutes` from that. *(Verified)*
 - **Untrusted-data rule**: imported skill/agent text from external repos is data
   the agent reasons over, never instructions it obeys. State this in the prompt.
   *(Recommended)*
@@ -253,7 +329,10 @@ do not match the lock.
 - [ ] Playbook: commit under `.github/skills/` **or** clone a pinned library in `steps:` into `/tmp/gh-aw/...`.
 - [ ] Sub-agent: inline `## agent:` **or** `.github/agents/*.md` + `imports:`.
 - [ ] Prompt body: tell the agent where the file is and to treat it as data.
+- [ ] Large library: add a deterministic pre-filter + a coverage-mix rule so the selection matches intent (§2d).
 - [ ] Frontmatter: `network.allowed` hosts, `tools:` the skill needs, `safe-outputs:` for the result.
+- [ ] Report delivery: agent writes a file → `post-steps:` (`if: always()`) cats it into `$GITHUB_STEP_SUMMARY` → `upload-artifact` for download (§5).
 - [ ] Pin external refs (`@tag`, `--branch`, image digests).
+- [ ] Size `timeout-minutes` from `max_skills` × per-skill call time, with headroom for a provider stall (§7).
 - [ ] `gh aw compile` (+ `--approve` if new secrets/actions); commit `.md` + `.lock.yml`.
 - [ ] Dispatch once; check the run summary and firewall logs; confirm the skill file was read and no host was blocked.

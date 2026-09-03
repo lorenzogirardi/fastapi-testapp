@@ -13,10 +13,10 @@ implemented in this repository. It is intended for both technical teams
 
 | Field | Value |
 |---|---|
-| Workflow engine | `github/gh-aw` (GitHub Agentic Workflows), compiler `v0.87.10` |
-| Agentic workflows (source) | `.github/workflows/ai-pr-review.md`, `ai-ci-diagnose.md`, `ai-fix-pr.md`, `ai-issue-to-draft-pr.md` |
+| Workflow engine | `github/gh-aw` (GitHub Agentic Workflows), compiler `v0.88.2` |
+| Agentic workflows (source) | `.github/workflows/ai-pr-review.md`, `ai-ci-diagnose.md`, `ai-fix-pr.md`, `ai-issue-to-draft-pr.md`, `security-review.md` |
 | Generated workflows | `.github/workflows/*.lock.yml` (produced by `gh aw compile`) |
-| Engine / model | `engine: copilot`; model via `COPILOT_MODEL=${{ vars.OPENROUTER_MODEL }}` (value `~deepseek/deepseek-v4-flash-latest`), routed via BYOK to OpenRouter |
+| Engine / model | `engine: copilot`; model via `COPILOT_MODEL=${{ vars.OPENROUTER_MODEL }}` (value `~deepseek/deepseek-v4-flash-latest`), routed via BYOK to OpenRouter; `models.default-ai-credits-pricing` set to the DeepSeek V4 Flash rate (`0.05` in / `0.16` out per Mtok) |
 | LLM provider boundary | OpenRouter endpoint `https://openrouter.ai/api/v1` (OpenAI-compatible `completions` wire format), set from repo variable `OPENROUTER_BASE_URL` |
 | Auth to provider | repository secret `OPENROUTER_API_KEY` (name only; value not shown) |
 | Operating mode | Human-in-the-loop, read-biased assistance with gated safe-outputs |
