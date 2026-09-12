@@ -33,7 +33,7 @@ opentelemetry-instrumentation-fastapi==0.65b0
 slowapi==0.1.10
 
 # MCP server (mounted at /api/mcp)
-mcp==2.1.1
+mcp==2.2.0
 
 # Testing
 pytest==9.1.1
