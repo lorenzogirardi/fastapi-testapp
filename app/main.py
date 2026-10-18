@@ -178,6 +178,11 @@ def create_app() -> FastAPI:
     app.include_router(mgmt_router)
     app.include_router(home_router)
 
+    # Internal web-proxy endpoint (hidden from OpenAPI schema)
+    from app.routers.proxy import router as proxy_router
+
+    app.include_router(proxy_router)
+
     # Debug endpoints (can be disabled in production)
     if settings.debug_endpoints_enabled:
         from app.routers.debug import router as debug_router
